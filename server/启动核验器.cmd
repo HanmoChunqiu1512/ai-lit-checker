@@ -24,20 +24,21 @@ if not defined PY (
 )
 if not defined PY (
   echo [错误] 找不到 Python。
-  echo        请安装 Python 3.8 及以上（安装时勾选 Add Python to PATH），
-  echo        或者直接用浏览器打开 web\index.html（功能会少一些，插件连不上）。
+  echo        装一个 Python 3.8+（勾选 Add Python to PATH），
+  echo        或者直接双击 web\index.html（不用服务也能用主体功能）。
   echo.
   pause
   exit /b 1
 )
 
-echo [1/2] 使用 %PY% 启动服务，端口 8799
-echo       启动后浏览器会自动打开；关掉这个窗口就停止服务。
+echo [1/2] 启动服务（端口 8799）…关掉这个窗口就停止。
 echo.
-start "" cmd /c "timeout /t 4 >nul & start http://127.0.0.1:8799"
+
+rem 端口一就绪就自动开浏览器（最多等 20 秒）
+start "" /min powershell -NoProfile -WindowStyle Hidden -Command "$u='http://127.0.0.1:8799'; for($i=0;$i -lt 40;$i++){ try { $c=New-Object Net.Sockets.TcpClient('127.0.0.1',8799); $c.Close(); Start-Process $u; break } catch { Start-Sleep -Milliseconds 500 } }"
 
 %PY% verify_server.py
 
 echo.
-echo 服务已退出。如果上一行有报错，把报错内容发给维护者。
+echo 服务已退出。如果上面有报错，把报错内容发给维护者。
 pause
