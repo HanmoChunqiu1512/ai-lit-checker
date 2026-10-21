@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "文献核验助手（知网篇名批量检索）",
-  "version": "0.8.1",
+  "version": "1.0.0",
   "description": "把 AI 生成的中文参考文献题名批量丢进知网按篇名检索，结果直接回填到核验器网页。",
   "permissions": ["tabs", "scripting", "storage", "clipboardRead"],
   "host_permissions": [
