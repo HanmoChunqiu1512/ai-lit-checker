@@ -1,5 +1,7 @@
 # AI 文献核验器（ai-lit-checker）
 
+> 当前版本：v1.0.0 ｜ [在线试用](https://hanmochunqiu1512.github.io/ai-lit-checker/) ｜ [Releases](https://github.com/HanmoChunqiu1512/ai-lit-checker/releases)
+
 把 AI 生成的一段参考文献粘进来，逐条核验真伪，并把人机分工写进流程里。
 
 自动层查 Crossref（有 DOI 直接验 DOI），人工层比对图书馆导出的题录，中文条目用浏览器插件按「篇名」去知网批量检索，结果回填到同一个表格里，最后一键导出 CSV / 打印报告。
