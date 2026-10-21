@@ -311,6 +311,8 @@ class Handler(BaseHTTPRequestHandler):
             candidates = [
                 os.path.join(here, "网页版-单文件.html"),
                 os.path.join(here, "..", "web", "index.html"),
+                os.path.join(here, "web", "index.html"),
+                os.path.join(here, "..", "litcheck-web", "index.html"),
                 os.path.join(here, "index.html"),
             ]
             for page_path in candidates:
@@ -355,7 +357,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, json.dumps({"error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
 
     def log_message(self, fmt, *args):
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        # pythonw 下 sys.stderr 可能是 None，直接写会抛异常、把连接掐断
+        try:
+            if sys.stderr:
+                sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        except Exception:
+            pass
 
 
 def main():
