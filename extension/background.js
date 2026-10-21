@@ -59,10 +59,16 @@ function decide(query, data, threshold) {
   return "未命中（可能虚构）";
 }
 
-// 把结果推给打开着的核验器网页
+// 把结果推给打开着的核验器网页（本地版 / 在线版都推）
 async function pushToPages(payload) {
   try {
-    const tabs = await chrome.tabs.query({ url: ["http://127.0.0.1:8799/*", "http://localhost:8799/*"] });
+    const tabs = await chrome.tabs.query({
+      url: [
+        "http://127.0.0.1:8799/*",
+        "http://localhost:8799/*",
+        "https://hanmochunqiu1512.github.io/ai-lit-checker/*"
+      ]
+    });
     for (const t of tabs) {
       try { await chrome.tabs.sendMessage(t.id, payload); } catch (e) {}
     }
