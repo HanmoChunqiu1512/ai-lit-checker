@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "文献核验助手（知网篇名批量检索）",
-  "version": "1.0.0",
-  "description": "把 AI 生成的中文参考文献题名批量丢进知网按篇名检索，结果直接回填到核验器网页。",
+  "version": "1.1.0",
+  "description": "把 AI 生成的中文参考文献题名批量丢进知网按篇名检索，结果直接回填到核验器网页（在线版或本地版都能连）。",
   "permissions": ["tabs", "scripting", "storage", "clipboardRead"],
   "host_permissions": [
     "https://kns.cnki.net/*",
     "https://s.wanfangdata.com.cn/*",
     "http://127.0.0.1:8799/*",
-    "http://localhost:8799/*"
+    "http://localhost:8799/*",
+    "https://hanmochunqiu1512.github.io/*"
   ],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "文献核验助手" },
@@ -19,7 +20,12 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://127.0.0.1:8799/*", "http://localhost:8799/*", "file:///*"],
+      "matches": [
+        "http://127.0.0.1:8799/*",
+        "http://localhost:8799/*",
+        "https://hanmochunqiu1512.github.io/ai-lit-checker/*",
+        "file:///*"
+      ],
       "js": ["bridge.js"],
       "run_at": "document_idle"
     }
