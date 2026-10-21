@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 文献核验器 · 网页版</title>
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--line:#e5e7eb;--ink:#1f2937;--sub:#6b7280;--blue:#2563eb;--red:#b91c1c;--amber:#b45309;--green:#15803d}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif;line-height:1.6}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 16px 60px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  textarea{width:100%;min-height:190px;padding:12px;border:1px solid var(--line);border-radius:10px;font-family:Consolas,Menlo,monospace;font-size:13px;resize:vertical;background:#fcfdff}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  button{border:0;border-radius:10px;padding:9px 18px;font-size:14px;cursor:pointer;background:var(--blue);color:#fff}
+  button.ghost{background:#eef2ff;color:#1e3a8a}
+  button:disabled{opacity:.55;cursor:default}
+  .hint{color:var(--sub);font-size:12px}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .stat b{display:block;font-size:22px;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--card)}
+  th,td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:top;text-align:left}
+  th{background:#f2f5fb;position:sticky;top:0}
+  td.num{text-align:right;white-space:nowrap}
+  .ok{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--amber)}
+  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px}
+  .note{color:var(--sub);font-size:12px;margin-top:14px}
+  .links{margin-top:4px;font-size:12px}
+  .links a{color:var(--blue);text-decoration:none;margin-right:2px}
+  .links a:hover{text-decoration:underline}
+  select{border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:13px;background:#fff}
+  .mini{border:1px solid var(--line);background:#f2f5fb;color:#1e3a8a;border-radius:8px;padding:3px 8px;font-size:12px;margin-left:4px;cursor:pointer}
+  .titleInput{width:100%;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:12px;background:#fcfdff}
+  summary::-webkit-details-marker{display:none}
+  @media (max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}}
+  @media print{
+    body{background:#fff}
+    .noprint{display:none!important}
+    .card,table{box-shadow:none}
+    .wrap{padding:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI 文献核验器</h1>
+  <div class="sub">把 AI 生成的一段参考文献粘进来，逐条核验真伪：有 DOI 查 DOI，没有就用题名走 Crossref 书目检索。判定口径见页脚。</div>
+
+  <div class="card noprint">
+    <textarea id="input" placeholder="示例：
+[1] Kucsko G, et al. Nanometre-scale thermometry in a living cell. Nature, 2013. DOI: 10.1038/nature12373
+[2] Zhang Y, et al. Stability of perovskite solar cells. Nature Energy, 2023. DOI: 10.1038/s41560-023-01234-5
+[3] Wang L, et al. Quantum entanglement in biological neural networks. Science, 2024."></textarea>
+    <div class="row">
+      <button id="run">开始核验</button>
+      <button id="demo" class="ghost">填入示例</button>
+      <button id="plug" class="ghost">用插件查中文</button>
+      <button id="sendExt" class="ghost">发到插件</button>
+      <button id="clear" class="ghost">清空</button>
+      <span id="extBadge" class="hint">插件未连接</span>
+      <span id="status" class="hint"></span>
+    </div>
+  </div>
+
+  <dialog id="plugDlg" style="max-width:520px;border:1px solid var(--line);border-radius:14px;padding:18px">
+    <h3 style="margin:0 0 8px;font-size:16px">用 Edge 插件批量查中文</h3>
+    <div class="hint" style="line-height:1.7">
+      1. 装插件：解压「文献核验助手-插件.zip」，打开 <b>edge://extensions</b>，右上角开「开发人员模式」，点「加载解压缩的扩展」，选解压出来的文件夹<br>
+      2. 点插件图标，先点「检测登录」，确认已登录知网<br>
+      3. 回到本页点下方的按钮，中文条目会复制到剪贴板<br>
+      4. 粘进插件 → 开始检索 → 导出结果
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="copyZh" class="ghost">复制待查中文条目</button>
+      <button id="closeDlg" class="ghost">关闭</button>
+    </div>
+  </dialog>
+
+  <div class="card noprint">
+    <details>
+      <summary style="cursor:pointer;font-size:14px">人工模式：粘贴知网/万方导出的题录（BibTeX、EndNote、GB/T 7714 都行），逐条比对</summary>
+      <textarea id="manual" style="margin-top:10px;min-height:130px" placeholder="把知网/万方的“导出参考文献”整段粘进来，例如：
+[1] 张三, 李四. 钙钛矿太阳能电池的界面修饰研究[J]. 太阳能学报, 2023, 44(5): 12-20.
+或 BibTeX / EndNote(RIS) 原始文本"></textarea>
+      <div class="row">
+        <button id="loadManual" class="ghost">解析并比对</button>
+        <span id="manualStatus" class="hint"></span>
+      </div>
+    </details>
+  </div>
+
+  <div id="result"></div>
+
+  <div class="note">
+    判定口径：DOI 能解析 → 属实；无 DOI 时按题名相似度，≥55% 疑似属实、35%~55% 存疑需人工判断、&lt;35% 疑似虚构。<br>
+    中文条目单独标记“需知网核验”，不计入虚构率——Crossref 基本不收录中文期刊，直接判虚构会误伤。<br>
+    Crossref 对任何查询都会返回最相近的一条，所以“存疑”必须人工复核——这一步不能省。<br>
+    核验数据来自 Crossref 公开 API，本页不上传、不保存任何内容。
+  </div>
+</div>
+
+<script>
+const CROSSREF = "https://api.crossref.org/works";
+const DOI_RE = /10\.\d{4,9}\/[^\s,;"'）)】\]]+/i;
+const ENTRY_START = /^\s*(?:\[?\d{1,3}[\]\.、)）]|\[\d+\])/;
+
+function norm(s){
+  return (s || "").toLowerCase().replace(/[^0-9a-z\u4e00-\u9fff]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function titleSimilarity(entry, hit){
+  const a = norm(entry), b = norm(hit);
+  if (!a || !b) return 0;
+  // 最长公共子串覆盖率
+  let best = 0;
+  const dp = new Array(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++){
+    let prev = 0;
+    for (let j = 1; j <= b.length; j++){
+      const tmp = dp[j];
+      if (a[i-1] === b[j-1]) { dp[j] = prev + 1; if (dp[j] > best) best = dp[j]; }
+      else dp[j] = 0;
+      prev = tmp;
+    }
+  }
+  const coverage = best / b.length;
+  const lenRatio = Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  let sim = coverage * 0.8 + lenRatio * 0.2;
+  // 命中标题比输入短太多，说明只是撞了几个词（比如 "Perovskite quantum dots"），要压分
+  if (b.length < 0.55 * a.length) sim *= 0.55;
+  return Math.min(1, sim);
+}
+
+// 看起来像“概述/说明”而不是参考文献的行
+function looksLikeAnnotation(line){
+  const s = (line || "").trim();
+  if (!s) return false;
+  if (/10\.\d{4,9}\//.test(s)) return false;          // 有 DOI
+  if (/\[\s*[A-Za-z]{1,2}\s*\]/.test(s)) return false; // 有 [J]/[M] 这类文献类型
+  if (/(?:19|20)\d{2}/.test(s)) return false;          // 有年份
+  if (/《.+》|\*\*.+\*\*/.test(s)) return false;        // 有书名号/粗体
+  // 纯中文、没有年份和文献类型标记，且以中文句号结尾或较长 → 当概述
+  const zh = cjkRatio(s);
+  if (zh > 0.5 && s.length >= 12) return true;
+  return false;
+}
+
+function splitEntries(text){
+  const lines = text.split(/\r?\n/);
+  const out = []; let buf = [];
+  const push = () => { const s = buf.join(" ").trim(); if (s.length > 12) out.push(s); buf = []; };
+  for (const raw of lines){
+    const ln = raw.trim();
+    if (!ln) { if (buf.length) push(); continue; }
+    // 概述行：并进上一条，不单独成条
+    if (buf.length && looksLikeAnnotation(ln) && !ENTRY_START.test(ln)){
+      buf.push(ln);
+      push();
+      continue;
+    }
+    const joined = buf.join(" ");
+    const looksContinuation = /^[a-z（(，,、;；]/.test(ln);
+    const startsNew = ENTRY_START.test(ln) ||
+      (buf.length && joined.length > 40 && /[.。]/.test(joined) && !looksContinuation);
+    if (startsNew && buf.length) push();
+    buf.push(ln);
+  }
+  if (buf.length) push();
+  return out.filter(e => e.length > 12);
+}
+
+async function getJSON(url, timeoutMs = 20000, retries = 1){
+  for (let attempt = 0; attempt <= retries; attempt++){
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, { signal: ctrl.signal, headers: { "Accept": "application/json" } });
+      if (!r.ok) {
+        if ((r.status === 429 || r.status >= 500) && attempt < retries) { await new Promise(s => setTimeout(s, 1200)); continue; }
+        return { error: "HTTP " + r.status };
+      }
+      return await r.json();
+    } catch (e) {
+      if (attempt < retries) { await new Promise(s => setTimeout(s, 1200)); continue; }
+      return { error: e.name === "AbortError" ? "超时" : "网络错误" };
+    } finally { clearTimeout(t); }
+  }
+  return { error: "网络错误" };
+}
+
+async function checkDoi(doi){
+  const d = await getJSON(CROSSREF + "/" + encodeURIComponent(doi));
+  if (d.error) return { found: false, error: d.error };
+  const m = d.message || {};
+  return {
+    found: true,
+    title: (m.title || [""])[0] || "",
+    container: (m["container-title"] || [""])[0] || "",
+    year: (((m.issued || {})["date-parts"] || [[null]])[0] || [null])[0]
+  };
+}
+
+async function searchBiblio(text){
+  // query.title 对"题名"检索更准；空了再退回 query.bibliographic
+  let d = await getJSON(CROSSREF + "?rows=5&query.title=" + encodeURIComponent(text.slice(0, 300)));
+  if (d.error) return { found: false, error: d.error };
+  let items = ((d.message || {}).items) || [];
+  if (!items.length){
+    d = await getJSON(CROSSREF + "?rows=5&query.bibliographic=" + encodeURIComponent(text.slice(0, 300)));
+    if (d.error) return { found: false, error: d.error };
+    items = ((d.message || {}).items) || [];
+  }
+  if (!items.length) return { found: false };
+  // 取前 5 条里题名最相似的那条，而不是 Crossref 排第一的那条
+  let best = null, bestSim = -1;
+  for (const it of items){
+    const t = (it.title || [""])[0] || "";
+    const sim = titleSimilarity(text, t);
+    if (sim > bestSim){
+      bestSim = sim;
+      best = {
+        title: t,
+        container: (it["container-title"] || [""])[0] || "",
+        year: (((it.issued || {})["date-parts"] || [[null]])[0] || [null])[0],
+        score: it.score || 0,
+        doi: it.DOI || ""
+      };
+    }
+  }
+  return { found: true, sim: Math.round(bestSim * 1000) / 10, ...best };
+}
+
+// ---------- 题名抽取 ----------
+function tidy(s){
+  let t = (s || "").replace(/\s+/g, " ").trim();
+  t = t.replace(/^[\s，,、:：\-–—]+/, "").replace(/[\s，,、:：;；.\-–—]+$/, "");
+  return t;
+}
+
+function stripLeadingNumber(s){
+  return (s || "").replace(/^\s*(?:\[?\d{1,3}[\]\.、)）]|\[\d+\])\s*/, "").replace(/^\s*\d+[\.\)、]\s*/, "").trim();
+}
+
+// 从一条参考文献里尽量抽出题名，按“最可信”的顺序试，都不行才兜底
+function extractTitle(entry){
+  const s = stripLeadingNumber(entry);
+
+  // 1) **粗体** 包裹
+  let m = s.match(/\*\*(.+?)\*\*/);
+  if (m && m[1].length >= 4) return tidy(m[1]);
+
+  // 2) 《》或引号包裹
+  m = s.match(/《([^》]{2,200})》/);
+  if (m) return tidy(m[1]);
+  m = s.match(/[“"]([^”"]{6,200})[”"]/);
+  if (m) return tidy(m[1]);
+
+  // 3) GB/T 7714：作者. 题名[J]. 刊名, 年, 卷(期): 页
+  m = s.match(/[.。]\s*([^.。\[\]〔〕]{4,200}?)\s*\[\s*[A-Za-z]{1,2}\s*\]/);
+  if (m) return tidy(m[1]);
+
+  // 4) 英文常见写法：Authors. Title. Journal, Year —— 挑“像题名”的那一段
+  const segs = s.split(/\.\s+/).map(tidy).filter(Boolean);
+  if (segs.length >= 2){
+    for (let i = 0; i < segs.length; i++){
+      const p = segs[i];
+      if (p.length < 12 || p.length > 220) continue;
+      if (/^(nature|science|journal|proceedings|ieee|acm|adv|appl|phys|chem|mater)\b/i.test(p)) continue;
+      const looksLikeAuthors = /^[A-Z][a-zA-Z'\-]+,\s*[A-Z]/.test(p) && (p.match(/,/g) || []).length >= 2;
+      if (looksLikeAuthors) continue;
+      return p;
+    }
+  }
+
+  // 5) 中文条目：题名后面常跟着“本文/该文/研究/综述…”的概述，要切掉
+  const zhCut = cutChineseAbstract(s);
+  if (zhCut) return zhCut;
+
+  // 6) 兜底：截到 (年份) / 中文句号 / 中文说明
+  let cut = s.split(/\s*[(（]\s*(?:19|20)\d{2}\s*[)）]\s*/)[0];
+  cut = cut.split(/[。；;]/)[0];
+  cut = cut.replace(/\s*（[^）]*）\s*$/, "");
+  return tidy(cut).slice(0, 220);
+}
+
+// 中文题名后面接概述的常见形态，切出题名部分
+function cutChineseAbstract(s){
+  const t = tidy(s);
+  if (cjkRatio(t) < 0.3) return "";
+  // 去掉“题名：/标题：”前缀
+  let m = t.match(/^(?:题名|标题|篇名)\s*[:：]\s*(.+)$/);
+  let body = m ? m[1] : t;
+
+  const markers = [
+    /[。；;]/,
+    /本文|本文作者|该文|文章|该研究|本研究|研究表明|研究结果表明|研究采用|研究以|综述了|介绍了|探讨了|分析了|提出了|基于此|作者认为|综上所述/,
+    /\s{2,}/
+  ];
+  let cutAt = -1;
+  for (const re of markers){
+    const mm = body.search(re);
+    if (mm > 0 && (cutAt === -1 || mm < cutAt)) cutAt = mm;
+  }
+  let out = cutAt > 0 ? body.slice(0, cutAt) : body;
+
+  // 还是太长（> 45 字）说明混进了概述，退到最近的逗号/顿号
+  if (out.length > 45){
+    const sub = out.slice(0, 45);
+    const lastCut = Math.max(sub.lastIndexOf("，"), sub.lastIndexOf("、"), sub.lastIndexOf(","));
+    if (lastCut >= 12) out = sub.slice(0, lastCut);
+    else out = sub;
+  }
+  out = tidy(out);
+  return out.length >= 6 ? out : "";
+}
+
+async function classify(entry){
+  const m = entry.match(DOI_RE);
+  if (m){
+    const doi = m[0].replace(/\.$/, "");
+    const res = await checkDoi(doi);
+    if (res.found) return { kind: "doi", doi, title: res.title || "", verdict: "属实（DOI 可解析）", match: 100, detail: res };
+    return { kind: "doi", doi, title: "", verdict: "虚构（DOI 无效）", match: 0, detail: res };
+  }
+  const title = extractTitle(entry);
+  const res = await searchBiblio(title);
+  let verdict, sim = 0;
+  if (res.error) {
+    return { kind: "err", doi: "", title, verdict: "查询失败（" + res.error + "，请重试）", match: 0, detail: res };
+  }
+  if (res.found) sim = res.sim != null ? res.sim : Math.round(titleSimilarity(title, res.title) * 1000) / 10;
+  const zh = cjkRatio(title);
+  if (!res.found) verdict = "查无（检索无结果）";
+  else if (zh > 0.3) verdict = sim >= 70 ? "中文条目（库中检出相似题名，仍需人工确认）" : "中文条目（Crossref 覆盖有限，需知网核验）";
+  else if (sim >= 55) verdict = "疑似属实（题名高度相似）";
+  else if (sim >= 35) verdict = "存疑（题名部分相似，需人工判断）";
+  else verdict = "疑似虚构（题名对不上）";
+  return { kind: zh > 0.3 ? "zh" : "text", doi: "", title, verdict, match: sim, detail: res };
+}
+
+// 用（人工修正过的）题名重新检索一条
+async function reclassifyWithTitle(title, fallbackEntry){
+  const t = tidy(title) || extractTitle(fallbackEntry);
+  const res = await searchBiblio(t);
+  let verdict, sim = 0;
+  if (res.error) {
+    return { kind: "err", doi: "", title: t, verdict: "查询失败（" + res.error + "，请重试）", match: 0, detail: res };
+  }
+  if (res.found) sim = res.sim != null ? res.sim : Math.round(titleSimilarity(t, res.title) * 1000) / 10;
+  const zh = cjkRatio(t);
+  if (!res.found) verdict = "查无（检索无结果）";
+  else if (zh > 0.3) verdict = sim >= 70 ? "中文条目（库中检出相似题名，仍需人工确认）" : "中文条目（Crossref 覆盖有限，需知网核验）";
+  else if (sim >= 55) verdict = "疑似属实（题名高度相似）";
+  else if (sim >= 35) verdict = "存疑（题名部分相似，需人工判断）";
+  else verdict = "疑似虚构（题名对不上）";
+  return { kind: zh > 0.3 ? "zh" : "text", doi: "", title: t, verdict, match: sim, detail: res };
+}
+
+function cjkRatio(s){
+  const cjk = (s.match(/[\u4e00-\u9fff]/g) || []).length;
+  const word = (s.match(/[a-zA-Z0-9]/g) || []).length;
+  if (!cjk) return 0;
+  return cjk / (cjk + word + 1e-9);
+}
+
+// ---------- 人工模式：解析知网/万方导出的题录，和 AI 条目逐条比对 ----------
+let MANUAL = [];
+
+function parseManualExport(text){
+  const out = [];
+  const raw = (text || "").trim();
+  if (!raw) return out;
+
+  // BibTeX
+  if (/@\w+\s*\{/.test(raw)){
+    const blocks = raw.split(/@\w+\s*\{/).slice(1);
+    for (const b of blocks){
+      const get = k => {
+        const m = b.match(new RegExp(k + "\\s*=\\s*[\\{\"]([\\s\\S]*?)[\\}\"]\\s*,", "i"));
+        return m ? m[1].replace(/[{}]/g, "").replace(/\s+/g, " ").trim() : "";
+      };
+      const title = get("title");
+      if (title) out.push({ title, year: (get("year").match(/\d{4}/) || [""])[0], journal: get("journal") || get("booktitle"), authors: get("author") });
+    }
+    if (out.length) return out;
+  }
+
+  // RIS / EndNote
+  if (/^\s*(TY|TI|PY|JO|T1|T2)\s*-/m.test(raw)){
+    const recs = raw.split(/\n\s*ER\s*-/);
+    for (const r of recs){
+      const field = k => {
+        const m = r.match(new RegExp("^\\s*" + k + "\\s*-\\s*(.+)$", "m"));
+        return m ? m[1].trim() : "";
+      };
+      const title = field("TI") || field("T1");
+      if (title) out.push({ title, year: (field("PY").match(/\d{4}/) || [""])[0], journal: field("JO") || field("T2") || field("JF"), authors: field("AU") });
+    }
+    if (out.length) return out;
+  }
+
+  // GB/T 7714 或纯文本：一行一条
+  for (const line of raw.split(/\r?\n/)){
+    const s = tidy(line);
+    if (s.length < 8) continue;
+    let title = "";
+    const gbt = s.match(/[.。]\s*([^.。\[\]〔〕]{4,200}?)\s*\[\s*[A-Za-z]{1,2}\s*\]/);
+    if (gbt) title = tidy(gbt[1]);
+    else title = extractTitle(s);
+    if (!title) continue;
+    out.push({
+      title,
+      year: (s.match(/(?:19|20)\d{2}/) || [""])[0],
+      journal: (s.match(/\]\s*[.。]\s*([^,，.。]+)/) || ["", ""])[1].trim(),
+      authors: (s.match(/^(.{2,40}?)[.。]/) || ["", ""])[1].trim()
+    });
+  }
+  return out;
+}
+
+function matchManual(row){
+  if (!MANUAL.length) return null;
+  let best = null, bestSim = -1;
+  for (const rec of MANUAL){
+    const sim = titleSimilarity(row.title || row.entry, rec.title) * 100;
+    if (sim > bestSim){ bestSim = sim; best = rec; }
+  }
+  const sim = Math.round(bestSim * 10) / 10;
+  const y1 = (String(row.entry).match(/(?:19|20)\d{2}/) || [""])[0];
+  const y2 = best && best.year || "";
+  const yearOk = !y1 || !y2 ? null : Math.abs(Number(y1) - Number(y2)) <= 1;
+  let verdict;
+  if (sim >= 70 && yearOk !== false) verdict = "题录比对：命中（属实）";
+  else if (sim >= 70 && yearOk === false) verdict = "题录比对：题名对得上，年份不符";
+  else if (sim >= 50) verdict = "题录比对：部分相似，需确认";
+  else verdict = "题录比对：未在导出题录中找到";
+  return { sim, rec: best, verdict, yearOk };
+}
+
+function esc(s){ return (s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+let ROWS = [], SUMMARY = {};
+let EXT = { connected: false, total: 0, got: 0 };
+
+function normK(s){ return String(s || "").toLowerCase().replace(/[^0-9a-z\u4e00-\u9fff]+/g, ""); }
+function postExt(obj){ window.postMessage({ source: "litcheck-web", ...obj }, "*"); }
+
+function updateExtBadge(text){
+  const el = document.getElementById("extBadge");
+  if (!el) return;
+  el.textContent = text || (EXT.connected ? "插件已连接" : "插件未连接（请用 启动核验器.cmd 打开本页）");
+  el.className = "hint";
+}
+
+function applyExtResult(r){
+  if (!r) return;
+  const q = normK(r.query);
+  const row = ROWS.find(x => normK(x.title).startsWith(q) || q.startsWith(normK(x.title)) || normK(x.title).includes(q) || q.includes(normK(x.title)));
+  if (!row) { EXT.got++; updateExtBadge(`插件检索中 ${EXT.got}/${EXT.total || "?"}（有结果没匹配到行）`); return; }
+  row.ext = r;
+  EXT.got++;
+  updateExtBadge(`插件检索中 ${EXT.got}/${EXT.total || "?"}`);
+  render();
+}
+
+window.addEventListener("message", (e) => {
+  if (e.source !== window || !e.data || e.data.source !== "litcheck-ext") return;
+  const d = e.data;
+  if (d.type === "hello") { EXT.connected = true; updateExtBadge("插件已连接"); }
+  else if (d.type === "started") { EXT.total = d.total || 0; EXT.got = 0; updateExtBadge(`插件检索中 0/${EXT.total}`); }
+  else if (d.type === "result") { applyExtResult(d.result); }
+  else if (d.type === "done") { updateExtBadge(`插件完成：${EXT.got}/${EXT.total}`); }
+  else if (d.type === "error") { updateExtBadge("插件：" + (d.message || "出错")); }
+});
+
+// 反复 ping，直到插件回应；15 秒还连不上就给排查清单
+let pingCount = 0;
+const pingTimer = setInterval(() => {
+  if (EXT.connected) { clearInterval(pingTimer); return; }
+  pingCount++;
+  postExt({ type: "ext:ping" });
+  if (pingCount >= 8) {
+    clearInterval(pingTimer);
+    updateExtBadge("插件未连接：① 用「启动核验器.cmd」打开本页（地址栏应是 http://127.0.0.1:8799）② edge://extensions 里点插件「刷新」③ 刷新本页");
+  }
+}, 2000);
+postExt({ type: "ext:ping" });
+
+function zhRows(){
+  return ROWS.filter(r => r.kind === "zh" || /[\u4e00-\u9fff]/.test(r.title || ""));
+}
+
+
+function searchLinks(keyword){
+  // 去掉书名号/引号/编号，只留检索词；知网按“篇名”检索
+  let kw = tidy(stripLeadingNumber(keyword || ""))
+    .replace(/[《》〈〉“”"'【】\[\]]/g, "")
+    .replace(/[.。，,；;：:]+$/, "")
+    .trim();
+  kw = kw.slice(0, 60);
+  const e = encodeURIComponent(kw);
+  return [
+    ["知网(篇名)", "https://kns.cnki.net/kns8s/defaultresult/index?kw=" + e + "&korder=TI"],
+    ["万方", "https://s.wanfangdata.com.cn/paper?q=" + e],
+    ["百度学术", "https://xueshu.baidu.com/s?wd=" + e],
+    ["Google", "https://scholar.google.com/scholar?q=" + e]
+  ];
+}
+
+function groupRowsHtml(){
+  const defs = [
+    ["有 DOI", "doi", "DOI 能解析即属实，可算硬指标"],
+    ["无 DOI（外文/英文）", "text", "只能给疑似/存疑，需人工"],
+    ["中文条目", "zh", "Crossref 基本不收录，需知网核验"],
+    ["查询失败", "err", "网络或限流，重试后不计入统计"]
+  ];
+  return defs.map(([name, kind, note]) => {
+    const rows = ROWS.filter(r => (r.kind || "") === kind);
+    if (!rows.length) return `<tr><td>${name}</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="hint">${note}</td></tr>`;
+    const fake = rows.filter(r => /虚构|查无/.test(r.verdict)).length;
+    const need = rows.filter(r => /存疑|中文条目|查无|查询失败/.test(r.verdict)).length;
+    return `<tr><td>${name}</td><td class="num">${rows.length}</td><td class="num bad">${fake}</td><td class="num warn">${need}</td><td class="hint">${note}</td></tr>`;
+  }).join("");
+}
+
+function render(){
+  const s = SUMMARY;
+  const humanSet = ROWS.filter(r => r.human && r.human !== "待定");
+  const humanTrue = humanSet.filter(r => r.human === "真实").length;
+  const humanFake = humanSet.filter(r => r.human === "虚构").length;
+  let html = `<div class="stats">
+    <div class="stat">条数<b>${s.total}</b></div>
+    <div class="stat">疑似虚构<b class="bad">${s.fake}</b><span class="hint">占 ${s.fakeRate}%</span></div>
+    <div class="stat">中文待核验<b class="warn">${s.zh}</b><span class="hint">不计入虚构率</span></div>
+    <div class="stat">含 DOI<b>${s.doiCount}</b></div>
+    <div class="stat">DOI 可解析<b class="ok">${s.doiOk}</b><span class="hint">占 ${s.doiRate}%</span></div>
+  </div>
+  <div class="hint" style="margin:-4px 0 12px">人工复核：已判 ${humanSet.length} 条（真实 ${humanTrue} ／ 虚构 ${humanFake} ／ 待定 ${s.total - humanSet.length}）</div>
+  <div class="card" style="padding:12px 14px">
+    <div class="hint" style="margin-bottom:6px">分组统计（有 DOI 的组能算硬指标，无 DOI 的组只能算疑似）</div>
+    <table style="margin:0"><thead><tr><th>分组</th><th>条数</th><th>判定虚构</th><th>需人工</th><th>备注</th></tr></thead><tbody>${groupRowsHtml()}</tbody></table>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+  <table><thead><tr><th>#</th><th>条目原文</th><th>题名（可改）</th><th>判定</th><th>相似度</th><th>Crossref 命中</th><th>题录比对</th><th>插件判定</th><th>人工复核</th></tr></thead><tbody>`;
+  for (const r of ROWS){
+    const cls = /虚构|查无/.test(r.verdict) ? "bad" : (/存疑|中文条目/.test(r.verdict) ? "warn" : "ok");
+    const d = r.detail || {};
+    let hit = d.title || "";
+    if (d.year) hit += `（${d.year}）`;
+    if (!hit) hit = d.error || "—";
+    const need = /存疑|中文条目|查无/.test(r.verdict);
+    const links = need ? searchLinks(r.title || r.entry).map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).join(" · ") : "";
+    const opts = ["待定", "真实", "虚构"].map(v => `<option value="${v}"${(r.human || "待定") === v ? " selected" : ""}>${v}</option>`).join("");
+    const mm = r.manual;
+    const mCls = !mm ? "" : (/命中/.test(mm.verdict) ? "ok" : (/未在|不符/.test(mm.verdict) ? "bad" : "warn"));
+    const mText = mm ? `${mm.verdict}（${mm.sim}）` : "—";
+    const ex = r.ext;
+    const exCls = !ex ? "" : (/命中$/.test(ex.verdict || "") ? "ok" : (/虚假|未命中|拦截|重定向/.test(ex.verdict || "") ? "bad" : "warn"));
+    const exText = ex ? `${ex.verdict}（${ex.hits}）` : "—";
+    html += `<tr><td class="num">${r.index}</td><td>${esc(r.entry)}${links ? `<div class="links">${links}</div>` : ""}</td>`
+          + `<td class="noprint"><input class="titleInput" data-idx="${r.index - 1}" value="${esc(r.title || "")}" title="抽错了可以改，改完点重搜">`
+          + `<button class="mini" data-research="${r.index - 1}">重搜</button></td>`
+          + `<td class="${cls}">${r.verdict}</td><td class="num">${r.match}</td><td>${esc(hit)}</td>`
+          + `<td class="${mCls}">${esc(mText)}</td>`
+          + `<td class="${exCls}">${esc(exText)}</td>`
+          + `<td class="noprint"><select data-idx="${r.index - 1}">${opts}</select></td></tr>`;
+  }
+  html += `</tbody></table></div>
+  <div class="row noprint">
+    <button id="csv" class="ghost">导出 CSV</button>
+    <button id="print" class="ghost">打印 / 存 PDF</button>
+    <button id="copyKw" class="ghost">复制全部待查题名</button>
+  </div>`;
+  document.getElementById("result").innerHTML = html;
+  document.getElementById("csv").onclick = exportCsv;
+  document.getElementById("print").onclick = () => window.print();
+  document.getElementById("copyKw").onclick = async () => {
+    const list = ROWS.filter(r => /存疑|中文条目|查无/.test(r.verdict)).map(r => tidy(r.title || "")).filter(Boolean);
+    if (!list.length) return;
+    const text = list.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      document.getElementById("copyKw").textContent = `已复制 ${list.length} 条`;
+      setTimeout(() => { document.getElementById("copyKw").textContent = "复制全部待查题名"; }, 2000);
+    } catch (e) {
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove();
+      document.getElementById("copyKw").textContent = `已复制 ${list.length} 条`;
+    }
+  };
+  document.querySelectorAll("#result select[data-idx]").forEach(sel => {
+    sel.onchange = () => { ROWS[Number(sel.dataset.idx)].human = sel.value; render(); };
+  });
+  document.querySelectorAll("#result button[data-research]").forEach(btn => {
+    btn.onclick = async () => {
+      const i = Number(btn.dataset.research);
+      const row = ROWS[i];
+      const input = document.querySelector(`#result input.titleInput[data-idx="${i}"]`);
+      const newTitle = input ? input.value : (row.title || "");
+      btn.disabled = true; btn.textContent = "查…";
+      const res = await reclassifyWithTitle(newTitle, row.entry);
+      ROWS[i] = { ...row, ...res, manual: matchManual({ ...row, title: res.title || newTitle }) };
+      render();
+    };
+  });
+}
+
+function exportCsv(){
+  const lines = ["序号,原文,题名,工具判定,相似度,DOI,命中标题,命中年份,题录比对,插件判定,插件命中数,插件首条,人工复核"];
+  const q = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  for (const r of ROWS){
+    const d = r.detail || {};
+    const mm = r.manual ? `${r.manual.verdict}(${r.manual.sim})` : "";
+    const ex = r.ext || {};
+    lines.push([r.index, r.entry, r.title || "", r.verdict, r.match, r.doi || "", d.title || "", d.year || "", mm,
+      ex.verdict || "", ex.hits != null ? ex.hits : "", (ex.top && ex.top.title) || "", r.human || "待定"].map(q).join(","));
+  }
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "文献核验结果.csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+async function run(){
+  const btn = document.getElementById("run");
+  const status = document.getElementById("status");
+  const text = document.getElementById("input").value.trim();
+  if (text.length < 10){ status.textContent = "先粘一段参考文献进来"; return; }
+  const entries = splitEntries(text);
+  if (!entries.length){ status.textContent = "没解析出条目，检查一下是不是一行一条"; return; }
+  btn.disabled = true;
+  ROWS = [];
+  for (let i = 0; i < entries.length; i++){
+    status.textContent = `核验中… ${i + 1}/${entries.length}`;
+    const r = await classify(entries[i]);
+    const row = { index: i + 1, entry: entries[i].slice(0, 400), ...r };
+    row.manual = matchManual(row);
+    ROWS.push(row);
+    await new Promise(res => setTimeout(res, 350));
+  }
+  const total = ROWS.length;
+  const fake = ROWS.filter(r => /虚构|查无/.test(r.verdict)).length;
+  const zh = ROWS.filter(r => r.kind === "zh").length;
+  const doiRows = ROWS.filter(r => r.kind === "doi");
+  const doiOk = doiRows.filter(r => r.match === 100).length;
+  SUMMARY = {
+    total, fake, zh,
+    fakeRate: total ? Math.round(fake / total * 1000) / 10 : 0,
+    doiCount: doiRows.length, doiOk,
+    doiRate: doiRows.length ? Math.round(doiOk / doiRows.length * 1000) / 10 : 0
+  };
+  status.textContent = "";
+  btn.disabled = false;
+  render();
+}
+
+document.getElementById("run").onclick = run;
+document.getElementById("plug").onclick = () => {
+  const dlg = document.getElementById("plugDlg");
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "open");
+};
+document.getElementById("closeDlg").onclick = () => document.getElementById("plugDlg").close();
+document.getElementById("copyZh").onclick = async () => {
+  const zh = ROWS.filter(r => (r.kind === "zh") || /\u4e00-\u9fff/.test(r.title || "")).map(r => tidy(r.title || r.entry));
+  const list = zh.length ? zh : ROWS.filter(r => /存疑|中文条目|查无/.test(r.verdict)).map(r => tidy(r.title || ""));
+  const text = list.filter(Boolean).join("\n");
+  if (!text) { document.getElementById("copyZh").textContent = "没有待查的中文条目"; return; }
+  try { await navigator.clipboard.writeText(text); } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  document.getElementById("copyZh").textContent = `已复制 ${list.length} 条`;
+  setTimeout(() => { document.getElementById("copyZh").textContent = "复制待查中文条目"; }, 2000);
+};
+document.getElementById("clear").onclick = () => {
+  document.getElementById("input").value = "";
+  const m = document.getElementById("manual");
+  if (m) m.value = "";
+  const ms = document.getElementById("manualStatus");
+  if (ms) ms.textContent = "";
+  ROWS = []; MANUAL = []; SUMMARY = {};
+  document.getElementById("result").innerHTML = "";
+  document.getElementById("status").textContent = "已清空";
+  setTimeout(() => { document.getElementById("status").textContent = ""; }, 1500);
+};
+document.getElementById("sendExt").onclick = () => {
+  if (!EXT.connected) { updateExtBadge("插件未连接：请用 启动核验器.cmd 打开本页，并确认插件已装好"); return; }
+  const list = zhRows().map(r => tidy(r.title || r.entry)).filter(Boolean);
+  if (!list.length) { updateExtBadge("没有中文条目可发"); return; }
+  postExt({ type: "ext:queue", titles: list, engine: "cnki", threshold: 20 });
+  updateExtBadge(`已发给插件：${list.length} 条`);
+};
+document.getElementById("loadManual").onclick = () => {
+  const status = document.getElementById("manualStatus");
+  const text = document.getElementById("manual").value;
+  MANUAL = parseManualExport(text);
+  if (!MANUAL.length){ status.textContent = "没解析出题录，检查一下格式"; return; }
+  status.textContent = `已读入 ${MANUAL.length} 条题录，正在比对…`;
+  for (const row of ROWS) row.manual = matchManual(row);
+  render();
+  status.textContent = `已读入 ${MANUAL.length} 条题录，比对完成`;
+};
+document.getElementById("demo").onclick = () => {
+  document.getElementById("input").value =
+`[1] Kucsko G, et al. Nanometre-scale thermometry in a living cell. Nature, 2013. DOI: 10.1038/nature12373
+[2] Zhang Y, et al. Stability of perovskite solar cells. Nature Energy, 2023. DOI: 10.1038/s41560-023-01234-5
+[3] Kucsko G, et al. Nanometre-scale thermometry in a living cell. Nature, 2013.
+[4] Wang L, et al. Quantum entanglement in biological neural networks. Science, 2024.`;
+};
+
+// 便于自测与分享示例：?demo=1 用内置示例，?text=... 指定内容，?manual=... 附带人工题录
+(async () => {
+  const QP = new URLSearchParams(location.search);
+  if (QP.get("demo") === "1") {
+    document.getElementById("demo").click();
+    await run();
+  } else if (QP.get("text")) {
+    document.getElementById("input").value = QP.get("text");
+    await run();
+  }
+  if (QP.get("manual")) {
+    document.getElementById("manual").value = QP.get("manual");
+    document.getElementById("loadManual").click();
+  }
+})();
+</script>
+</body>
+</html>
