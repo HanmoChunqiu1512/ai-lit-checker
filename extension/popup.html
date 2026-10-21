@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>文献核验助手</title>
+<style>
+  body{font-family:"Microsoft YaHei",sans-serif;width:440px;margin:0;padding:12px;color:#1f2937;background:#f7f9fc}
+  h1{font-size:15px;margin:0 0 6px}
+  .hint{font-size:12px;color:#6b7280;line-height:1.5}
+  textarea{width:100%;height:110px;margin-top:8px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-family:Consolas,monospace;font-size:12px;box-sizing:border-box}
+  .row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+  button{border:0;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;background:#2563eb;color:#fff}
+  button.ghost{background:#eef2ff;color:#1e3a8a}
+  button:disabled{opacity:.5;cursor:default}
+  select{border:1px solid #e5e7eb;border-radius:8px;padding:5px;font-size:12px;background:#fff}
+  label.chk{font-size:12px;color:#374151;display:flex;align-items:center;gap:4px}
+  #status{font-size:12px;color:#374151;margin-top:8px}
+  #list{margin-top:10px;max-height:260px;overflow:auto;border-top:1px solid #e5e7eb}
+  .item{padding:6px 2px;border-bottom:1px solid #f1f3f7;font-size:12px}
+  .q{color:#111;font-weight:600}
+  .t{color:#6b7280}
+  .ok{color:#15803d}.bad{color:#b91c1c}.warn{color:#b45309}
+  .box{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px;margin-top:8px;font-size:12px;color:#9a3412;display:none}
+</style>
+<h1>文献核验助手</h1>
+<div class="hint">粘题名（一条一行）→ 插件逐条按知网「篇名」检索，抓命中条数和首条题名。</div>
+<textarea id="titles" placeholder="钙钛矿太阳能电池的界面钝化研究"></textarea>
+<div class="row">
+  <select id="source">
+    <option value="cnki">知网</option>
+    <option value="wanfang">万方（备用）</option>
+  </select>
+  <label class="chk"><input type="checkbox" id="fg">遇到验证时前台显示</label>
+  <label class="chk">命中超过 <input type="number" id="thr" value="20" min="1" max="9999" style="width:56px;border:1px solid #e5e7eb;border-radius:6px;padding:2px 4px"> 条判为虚假</label>
+  <button id="start">开始检索</button>
+  <button id="stop" class="ghost" disabled>停止</button>
+  <button id="cont" class="ghost" disabled>继续</button>
+  <button id="export" class="ghost" disabled>导出结果</button>
+  <button id="home" class="ghost">打开知网</button>
+  <button id="check" class="ghost">检测登录</button>
+  <button id="clear" class="ghost">清空</button>
+</div>
+<div class="box" id="captchaBox">
+  被知网安全验证挡住了。请在已经打开的那个标签页里手动滑一下，滑完点上面的「继续」。
+</div>
+<div id="status">就绪</div>
+<div class="hint" style="margin-top:8px;line-height:1.7">
+  正确顺序：<b>打开知网 → 检测登录（显示已登录）→ 粘题名 → 开始检索 → 导出结果</b><br>
+  命中数超过阈值判“疑似虚假”（题名太泛或根本不存在）；1~阈值条判“部分命中”；结果里有同名题名才判“命中”。
+</div>
+<div id="list"></div>
+<script src="popup.js"></script>
