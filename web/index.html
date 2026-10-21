@@ -35,6 +35,24 @@
   .mini{border:1px solid var(--line);background:#f2f5fb;color:#1e3a8a;border-radius:8px;padding:3px 8px;font-size:12px;margin-left:4px;cursor:pointer}
   .titleInput{width:100%;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:12px;background:#fcfdff}
   summary::-webkit-details-marker{display:none}
+  .banner{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+    background:linear-gradient(90deg,#fff7ed,#fef3c7);border:1px solid #fcd34d;border-radius:14px;padding:12px 16px;margin-bottom:16px}
+  .banner-title{font-size:14px;font-weight:700;color:#92400e}
+  .banner-sub{font-size:12px;color:#a16207;margin-top:2px}
+  .banner-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pill{padding:3px 10px;border-radius:999px;font-size:12px;white-space:nowrap}
+  .pill-warn{background:#fee2e2;color:#b91c1c}
+  .pill-ok{background:#dcfce7;color:#15803d}
+  dialog.setup{max-width:640px;border:1px solid var(--line);border-radius:16px;padding:20px;background:#fff}
+  dialog.setup h3{margin:0 0 12px;font-size:17px}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tab{border:1px solid var(--line);background:#f8fafc;color:#334155;border-radius:999px;padding:5px 16px;font-size:13px;cursor:pointer}
+  .tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .steps{font-size:13px;line-height:2;color:#334155}
+  .steps b{color:#111827}
+  .steps code{background:#f1f5f9;border-radius:6px;padding:2px 6px;font-family:Consolas,monospace;font-size:12px;color:#1e3a8a}
+  .setup-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .chk{font-size:12px;color:#475569;display:flex;align-items:center;gap:6px}
   @media (max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}}
   @media print{
     body{background:#fff}
@@ -49,6 +67,18 @@
   <h1>AI 文献核验器</h1>
   <div class="sub">把 AI 生成的一段参考文献粘进来，逐条核验真伪：有 DOI 查 DOI，没有就用题名走 Crossref 书目检索。判定口径见页脚。</div>
 
+  <div class="banner" id="setupBanner">
+    <div class="banner-main">
+      <div class="banner-title">中文文献要两步才能自动核验：装浏览器插件（Edge / Chrome 通用）→ 在浏览器里登录知网</div>
+      <div class="banner-sub">没装插件也能用自动核验，只是中文条目要点链接人工查。</div>
+    </div>
+    <div class="banner-actions">
+      <span id="extBadge" class="pill pill-warn">插件未连接</span>
+      <button id="openSetup">查看安装步骤</button>
+      <button id="hideBanner" class="ghost">先不用</button>
+    </div>
+  </div>
+
   <div class="card noprint">
     <textarea id="input" placeholder="示例：
 [1] Kucsko G, et al. Nanometre-scale thermometry in a living cell. Nature, 2013. DOI: 10.1038/nature12373
@@ -60,21 +90,40 @@
       <button id="plug" class="ghost">用插件查中文</button>
       <button id="sendExt" class="ghost">发到插件</button>
       <button id="clear" class="ghost">清空</button>
-      <span id="extBadge" class="hint">插件未连接</span>
       <span id="status" class="hint"></span>
     </div>
   </div>
 
+  <dialog id="setupDlg" class="setup">
+    <h3>两步开始用（Edge / Chrome 都一样）</h3>
+    <div class="tabs">
+      <button class="tab active" data-tab="edge">Edge</button>
+      <button class="tab" data-tab="chrome">Chrome</button>
+    </div>
+    <div id="setupSteps" class="steps"></div>
+    <div class="setup-foot">
+      <label class="chk"><input type="checkbox" id="noMore"> 以后不再自动弹出</label>
+      <div class="row" style="margin:0">
+        <button id="checkExt">检测插件连接</button>
+        <button id="setupOk" class="ghost">我已完成</button>
+        <button id="setupClose" class="ghost">关闭</button>
+      </div>
+    </div>
+    <div id="setupStatus" class="hint" style="margin-top:8px"></div>
+  </dialog>
+
   <dialog id="plugDlg" style="max-width:520px;border:1px solid var(--line);border-radius:14px;padding:18px">
-    <h3 style="margin:0 0 8px;font-size:16px">用 Edge 插件批量查中文</h3>
+    <h3 style="margin:0 0 8px;font-size:16px">用浏览器插件批量查中文</h3>
     <div class="hint" style="line-height:1.7">
-      1. 装插件：解压「文献核验助手-插件.zip」，打开 <b>edge://extensions</b>，右上角开「开发人员模式」，点「加载解压缩的扩展」，选解压出来的文件夹<br>
+      1. 装插件：解压「文献核验助手」压缩包，打开 <b>edge://extensions</b>（Chrome 是 <b>chrome://extensions</b>），
+      打开「开发人员模式」，点「加载解压缩的扩展」，选解压出来的文件夹<br>
       2. 点插件图标，先点「检测登录」，确认已登录知网<br>
-      3. 回到本页点下方的按钮，中文条目会复制到剪贴板<br>
-      4. 粘进插件 → 开始检索 → 导出结果
+      3. 回到本页点「发到插件」，中文条目会自动推送过去（不用复制粘贴）<br>
+      4. 插件逐条查完，结果会回填到下面表格的「插件判定」列
     </div>
     <div class="row" style="margin-top:14px">
       <button id="copyZh" class="ghost">复制待查中文条目</button>
+      <button id="openSetup2" class="ghost">看安装步骤</button>
       <button id="closeDlg" class="ghost">关闭</button>
     </div>
   </dialog>
@@ -453,11 +502,56 @@ function updateExtBadge(text){
   if (!el) return;
   const online = location.protocol === "https:";
   const idle = EXT.connected ? "插件已连接"
-    : (online ? "插件未连接：确认已装并启用「文献核验助手」，然后刷新本页"
-              : "插件未连接：本地版请用「启动核验器.cmd」打开");
+    : (online ? "插件未连接" : "插件未连接（本地版请用启动脚本打开）");
   el.textContent = text || idle;
-  el.className = "hint";
+  el.className = EXT.connected ? "pill pill-ok" : "pill pill-warn";
+  const banner = document.getElementById("setupBanner");
+  if (banner) banner.style.borderColor = EXT.connected ? "#86efac" : "#fcd34d";
 }
+
+// ---------- 安装引导（弹窗） ----------
+const SETUP_KEY = "ailit.setup.done.v1";
+const SETUP_STEPS = {
+  edge: `
+    <div>① <b>装插件</b>：解压「文献核验助手」压缩包，浏览器打开 <code>edge://extensions</code> →
+        右下角打开「开发人员模式」→ 点「加载解压缩的扩展」→ 选解压出来的文件夹</div>
+    <div>② <b>登录知网</b>：在新标签页打开 <code>https://www.cnki.net</code>，用校园网或账号登录，
+        随便搜一下能出结果就行</div>
+    <div>③ <b>回到本页</b>：点下方「检测插件连接」，看到「插件已连接」就可以用了；
+        以后直接点「发到插件」，中文条目会自动推送过去</div>`,
+  chrome: `
+    <div>① <b>装插件</b>：解压「文献核验助手」压缩包，浏览器打开 <code>chrome://extensions</code> →
+        右上角打开「开发者模式」→ 点「加载已解压的扩展程序」→ 选解压出来的文件夹</div>
+    <div>② <b>登录知网</b>：在新标签页打开 <code>https://www.cnki.net</code>，用校园网或账号登录，
+        随便搜一下能出结果就行</div>
+    <div>③ <b>回到本页</b>：点下方「检测插件连接」，看到「插件已连接」就可以用了；
+        以后直接点「发到插件」，中文条目会自动推送过去</div>`
+};
+
+function detectTab(){
+  const ua = navigator.userAgent;
+  return /Edg\//.test(ua) ? "edge" : (/Chrome\//.test(ua) ? "chrome" : "edge");
+}
+
+function showSetupTab(tab){
+  document.querySelectorAll("#setupDlg .tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.getElementById("setupSteps").innerHTML = SETUP_STEPS[tab] || SETUP_STEPS.edge;
+}
+
+function openSetup(){
+  const dlg = document.getElementById("setupDlg");
+  if (!dlg) return;
+  showSetupTab(detectTab());
+  document.getElementById("setupStatus").textContent = "";
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "open");
+}
+
+function closeSetup(){
+  const dlg = document.getElementById("setupDlg");
+  if (!dlg) return;
+  if (dlg.close) dlg.close(); else dlg.removeAttribute("open");
+}
+
 
 function applyExtResult(r){
   if (!r) return;
@@ -499,6 +593,46 @@ postExt({ type: "ext:ping" });
 function zhRows(){
   return ROWS.filter(r => r.kind === "zh" || /[\u4e00-\u9fff]/.test(r.title || ""));
 }
+
+// ---------- 引导弹窗的事件绑定 ----------
+document.querySelectorAll("#setupDlg .tab").forEach(b => {
+  b.onclick = () => showSetupTab(b.dataset.tab);
+});
+document.getElementById("openSetup").onclick = openSetup;
+document.getElementById("openSetup2").onclick = () => {
+  const p = document.getElementById("plugDlg");
+  if (p && p.close) p.close();
+  openSetup();
+};
+document.getElementById("hideBanner").onclick = () => {
+  document.getElementById("setupBanner").style.display = "none";
+};
+document.getElementById("setupClose").onclick = closeSetup;
+document.getElementById("setupOk").onclick = () => {
+  if (document.getElementById("noMore").checked) localStorage.setItem(SETUP_KEY, "1");
+  closeSetup();
+};
+document.getElementById("checkExt").onclick = () => {
+  const st = document.getElementById("setupStatus");
+  st.textContent = "正在检测…";
+  postExt({ type: "ext:ping" });
+  setTimeout(() => {
+    if (EXT.connected) {
+      st.style.color = "#15803d";
+      st.textContent = "插件已连接 ✓ 可以开始用了（记得先在知网登录过）";
+    } else {
+      st.style.color = "#b91c1c";
+      st.textContent = "还没连上：确认插件已启用、并且这一步是在当前页面操作的；改完刷新页面再试";
+    }
+  }, 1200);
+};
+
+// 首次进来（且插件没连上）自动弹一次安装引导
+setTimeout(() => {
+  try {
+    if (!localStorage.getItem(SETUP_KEY) && !EXT.connected) openSetup();
+  } catch (e) {}
+}, 1500);
 
 
 function searchLinks(keyword){
