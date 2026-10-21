@@ -451,7 +451,11 @@ function postExt(obj){ window.postMessage({ source: "litcheck-web", ...obj }, "*
 function updateExtBadge(text){
   const el = document.getElementById("extBadge");
   if (!el) return;
-  el.textContent = text || (EXT.connected ? "插件已连接" : "插件未连接（请用 启动核验器.cmd 打开本页）");
+  const online = location.protocol === "https:";
+  const idle = EXT.connected ? "插件已连接"
+    : (online ? "插件未连接：确认已装并启用「文献核验助手」，然后刷新本页"
+              : "插件未连接：本地版请用「启动核验器.cmd」打开");
+  el.textContent = text || idle;
   el.className = "hint";
 }
 
@@ -484,7 +488,10 @@ const pingTimer = setInterval(() => {
   postExt({ type: "ext:ping" });
   if (pingCount >= 8) {
     clearInterval(pingTimer);
-    updateExtBadge("插件未连接：① 用「启动核验器.cmd」打开本页（地址栏应是 http://127.0.0.1:8799）② edge://extensions 里点插件「刷新」③ 刷新本页");
+    const online = location.protocol === "https:";
+    updateExtBadge(online
+      ? "插件未连接：① 确认「文献核验助手」已安装并启用 ② 在 edge://extensions 点插件「刷新」③ 刷新本页"
+      : "插件未连接：① 用「启动核验器.cmd」打开本页（地址栏应是 http://127.0.0.1:8799）② edge://extensions 里点插件「刷新」③ 刷新本页");
   }
 }, 2000);
 postExt({ type: "ext:ping" });
