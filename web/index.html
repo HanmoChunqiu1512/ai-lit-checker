@@ -492,7 +492,7 @@ function matchManual(row){
 function esc(s){ return (s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 let ROWS = [], SUMMARY = {};
-let EXT = { connected: false, total: 0, got: 0 };
+let EXT = { connected: false, total: 0, got: 0, rows: [], unmatched: [] };
 
 function normK(s){ return String(s || "").toLowerCase().replace(/[^0-9a-z\u4e00-\u9fff]+/g, ""); }
 function postExt(obj){ window.postMessage({ source: "litcheck-web", ...obj }, "*"); }
@@ -556,8 +556,22 @@ function closeSetup(){
 function applyExtResult(r){
   if (!r) return;
   const q = normK(r.query);
-  const row = ROWS.find(x => normK(x.title).startsWith(q) || q.startsWith(normK(x.title)) || normK(x.title).includes(q) || q.includes(normK(x.title)));
-  if (!row) { EXT.got++; updateExtBadge(`插件检索中 ${EXT.got}/${EXT.total || "?"}（有结果没匹配到行）`); return; }
+  let row = q ? ROWS.find(x => {
+    const t = normK(x.title), e = normK(x.entry);
+    return (t && (t.startsWith(q) || q.startsWith(t) || t.includes(q) || q.includes(t)))
+        || (e && (e.startsWith(q) || e.includes(q)));
+  }) : null;
+  // 题名对不上就按队列顺序兜底：插件是按 ext:queue 的顺序回结果的
+  if (!row) {
+    const idx = EXT.rows[EXT.got];
+    if (idx != null && ROWS[idx] && !ROWS[idx].ext) row = ROWS[idx];
+  }
+  if (!row) {
+    EXT.got++;
+    EXT.unmatched.push(r.query || "");
+    updateExtBadge(`插件检索中 ${EXT.got}/${EXT.total || "?"}（${EXT.unmatched.length} 条没挂上）`);
+    return;
+  }
   row.ext = r;
   EXT.got++;
   updateExtBadge(`插件检索中 ${EXT.got}/${EXT.total || "?"}`);
@@ -570,7 +584,11 @@ window.addEventListener("message", (e) => {
   if (d.type === "hello") { EXT.connected = true; updateExtBadge("插件已连接"); }
   else if (d.type === "started") { EXT.total = d.total || 0; EXT.got = 0; updateExtBadge(`插件检索中 0/${EXT.total}`); }
   else if (d.type === "result") { applyExtResult(d.result); }
-  else if (d.type === "done") { updateExtBadge(`插件完成：${EXT.got}/${EXT.total}`); }
+  else if (d.type === "done") {
+    const miss = (EXT.unmatched || []).length;
+    updateExtBadge(miss ? `插件完成：${EXT.got}/${EXT.total}（${miss} 条没挂上，已尽量按顺序补挂）` : `插件完成：${EXT.got}/${EXT.total}`);
+    render();
+  }
   else if (d.type === "error") { updateExtBadge("插件：" + (d.message || "出错")); }
 });
 
@@ -832,8 +850,13 @@ document.getElementById("clear").onclick = () => {
 };
 document.getElementById("sendExt").onclick = () => {
   if (!EXT.connected) { updateExtBadge("插件未连接：请用 启动核验器.cmd 打开本页，并确认插件已装好"); return; }
-  const list = zhRows().map(r => tidy(r.title || r.entry)).filter(Boolean);
+  const rows = zhRows();
+  const list = rows.map(r => tidy(r.title || r.entry)).filter(Boolean);
   if (!list.length) { updateExtBadge("没有中文条目可发"); return; }
+  // 记下这一批对应的行号（按发送顺序），插件按顺序回结果时能兜底挂对行
+  EXT.rows = rows.filter(r => tidy(r.title || r.entry)).map(r => r.index - 1);
+  EXT.got = 0;
+  EXT.unmatched = [];
   postExt({ type: "ext:queue", titles: list, engine: "cnki", threshold: 20 });
   updateExtBadge(`已发给插件：${list.length} 条`);
 };
